@@ -1,0 +1,235 @@
+---
+title: "TidyTemplate"
+date: 2020-08-12
+output: html_output
+editor_options: 
+  chunk_output_type: console
+---
+
+# TidyTuesday
+
+Join the R4DS Online Learning Community in the weekly #TidyTuesday event!
+Every week we post a raw dataset, a chart or article related to that dataset, and ask you to explore the data.
+While the dataset will be “tamed”, it will not always be tidy! As such you might need to apply various R for Data Science techniques to wrangle the data into a true tidy format.
+The goal of TidyTuesday is to apply your R skills, get feedback, explore other’s work, and connect with the greater #RStats community!
+As such we encourage everyone of all skills to participate!
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(tidytuesdayR)
+library(tvthemes)
+
+theme_set(theme_avatar(title.font = "Slayer",
+                       text.font = "Slayer",
+                       title.size = 14))
+```
+
+# Load the weekly Data
+
+Dowload the weekly data and make available in the `tt` object.
+
+```{r Load}
+
+tt <- tt_load("2020-08-11")
+avatar <- tt$avatar
+scene <- tt$scene_description
+
+```
+
+
+# Readme
+
+Take a look at the readme for the weekly data to get insight on the dataset.
+This includes a data dictionary, source, and a link to an article on the data.
+
+```{r Readme, eval = interactive()}
+
+tt
+avatar %>%
+  count(character, sort =TRUE)
+
+```
+
+
+# Glimpse Data
+
+Take an initial look at the format of the data available.
+
+```{r tidytext}
+library(tidytext)
+avatar %>%
+  filter(!is.na(character_words)) %>%
+  mutate(book = fct_inorder(book),
+         character = fct_lump_n(character, 10)) %>%
+  count(book, character) %>%
+  mutate(character = reorder_within(character, n, book)) %>%
+  ggplot(aes(n, character, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, scales = "free") +
+  scale_y_reordered() +  
+  scale_fill_manual(values = c(
+    avatar_pal("WaterTribe")(1),
+    avatar_pal("EarthKingdom")(1),
+    avatar_pal("FireNation")(1)
+  )) +
+  labs(y = NULL)
+  
+```
+
+# Wrangle
+
+Explore the data and process it into a nice format for plotting! Access each dataset by name by using a dollarsign after the `tt` object and then the name of the data set.
+
+```{r Wrangle}
+avatar <- avatar %>%
+  filter(!is.na(character_words)) %>%
+  mutate(aang = if_else(character == "Aang", "Aang", "Other")) %>%
+  select(aang, book, text = character_words)
+  
+avatar %>%
+  filter(aang == "Aang") %>%
+  sample_n(10) %>%
+  pull(text)
+
+library(tidylo)
+avatar_lo <- avatar %>%
+  unnest_tokens(word, text) %>%
+  count(aang, word) %>%
+  bind_log_odds(aang, word, n) %>%
+  arrange(-log_odds_weighted)
+
+ avatar_lo %>%
+  group_by(aang) %>%
+  top_n(15) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, log_odds_weighted)) %>%
+  ggplot(aes(log_odds_weighted, word, fill = aang)) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~aang, scales = "free") +
+  scale_fill_avatar(palette = "AirNomads") +
+  labs(y = NULL)
+```
+
+
+# Visualize
+
+Using your processed dataset, create your unique visualization.
+
+```{r Visualize}
+avatar %>%
+  mutate(character = fct_lump(character),
+         character = fct_reorder(character, imdb_rating)) %>%
+  filter(character) %>%
+  ggplot(aes(x=character, y=imdb_rating)) +
+  geom_boxplot() +
+  coord_flip()
+  
+```
+
+
+
+```{r}
+library(textfeatures)
+
+tf <- textfeatures(avatar,
+  sentiment = FALSE, word_dims = 0,
+  normalize = FALSE, verbose = FALSE
+)
+
+tf %>%
+  bind_cols(avatar) %>%
+  group_by(aang) %>%
+  summarise(across(starts_with("n_"), mean)) %>%
+  pivot_longer(starts_with("n_"), names_to = "text_feature") %>%
+  filter(value > 0.01) %>%
+  mutate(text_feature = fct_reorder(text_feature, -value)) %>%
+  ggplot(aes(aang, value, fill = aang)) +
+  geom_col(position = "dodge", alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~text_feature, scales = "free", ncol = 6) +
+  scale_fill_avatar("AirNomads") +
+  labs(x = NULL, y = "Mean text features per spoken line")
+```
+
+## Build two models
+
+
+```{r}
+library(tidymodels)
+
+set.seed(123)
+avatar_split <- initial_split(avatar, strata = aang)
+avatar_train <- training(avatar_split)
+avatar_test <- testing(avatar_split)
+
+avatar_folds <- vfold_cv(avatar_train, strata = aang)
+```
+
+
+```{r}
+library(themis)
+library(textrecipes)
+
+avatar_rec <- recipe(aang ~ text, data = avatar_train) %>%
+  step_downsample(aang) %>%
+  step_textfeature(text) %>%
+  step_zv(all_predictors()) %>%
+  step_normalize(all_predictors())
+
+avatar_prec <- prep(avatar_rec)
+juice(avatar_prec)
+```
+
+```{r}
+rf_spec <- rand_forest(trees = 1000) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+rf_spec
+
+svm_spec <- svm_rbf(cost = 0.5) %>%
+  set_engine("kernlab") %>%
+  set_mode("classification")
+
+svm_spec
+
+avatar_wf <- workflow() %>%
+  add_recipe(avatar_rec)
+
+avatar_wf
+
+```
+
+```{r}
+doParallel::registerDoParallel()
+
+set.seed(1234)
+rf_rs <- avatar_wf %>%
+  add_model(rf_spec) %>%
+  fit_resamples(
+    resamples = avatar_folds, 
+    metrics = metric_set(roc_auc, accuracy, sens, spec),
+    control = control_grid(save_pred = TRUE)
+  )
+ 
+set.seed(2345)
+svm_rs <- avatar_wf %>%
+  add_model(svm_spec) %>%
+  fit_resamples(
+    resamples = avatar_folds,
+    metrics = metric_set(roc_auc, accuracy, sens, spec),
+    control = control_grid(save_pred = TRUE)
+  ) 
+```
+
+
+```{r}
+
+# This will save your most recent plot
+ggsave(
+  filename = "My TidyTuesday Plot.png",
+  device = "png")
+
+```
