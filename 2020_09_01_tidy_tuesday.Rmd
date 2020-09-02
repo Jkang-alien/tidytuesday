@@ -1,0 +1,136 @@
+---
+title: "TidyTemplate"
+date: 2020-09-02
+output: html_output
+editor_options: 
+  chunk_output_type: console
+---
+
+# TidyTuesday
+
+Join the R4DS Online Learning Community in the weekly #TidyTuesday event!
+Every week we post a raw dataset, a chart or article related to that dataset, and ask you to explore the data.
+While the dataset will be “tamed”, it will not always be tidy! As such you might need to apply various R for Data Science techniques to wrangle the data into a true tidy format.
+The goal of TidyTuesday is to apply your R skills, get feedback, explore other’s work, and connect with the greater #RStats community!
+As such we encourage everyone of all skills to participate!
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(tidytuesdayR)
+theme_set(theme_light())
+
+```
+
+# Load the weekly Data
+
+Dowload the weekly data and make available in the `tt` object.
+
+```{r Load}
+
+tt <- tt_load("2020-09-01")
+
+```
+
+
+# Readme
+
+Take a look at the readme for the weekly data to get insight on the dataset.
+This includes a data dictionary, source, and a link to an article on the data.
+
+```{r Readme, eval = interactive()}
+
+tt
+
+```
+
+
+# Glimpse Data
+
+Take an initial look at the format of the data available.
+
+```{r Glimpse}
+
+tt %>% 
+  map(glimpse)
+
+arable <- tt$arable_land_pin
+
+arable %>% view()
+
+arable <- arable %>%
+  rename(Arable_land = `Arable land needed to produce a fixed quantity of crops ((1.0 = 1961))`)
+
+arable %>%
+  group_by(Entity) %>%
+  summarise(mean = mean(Arable_land)) %>%
+  arrange(desc(mean)) %>%
+  mutate(Entity = fct_reorder(Entity, mean)) %>%
+  #head(20) %>%
+  ggplot(aes(Entity, mean)) +
+  #geom_point() +
+  geom_bar(stat = "identity") +
+  coord_flip() 
+
+arable %>%
+  group_by(Year) %>%
+  summarise(mean = mean(Arable_land), sd = sd(Arable_land)) %>%
+  arrange(desc(mean)) %>%
+  ggplot(aes(Year, mean)) +
+  geom_line(stat="identity") +
+  geom_errorbar(aes(ymin = mean-sd, ymax = mean+sd)) 
+
+key_crop <- tt$key_crop_yields %>% 
+  rename_with(~ gsub(" \\(tonnes per hectare)", "", .x)) 
+
+key_crop %>% 
+  skimr::skim()
+
+key_crop %>%
+  filter(Code == "AFG") %>%
+  pivot_longer(Wheat:Bananas,
+               names_to = "Crop",
+               values_to = "Yield") %>%
+  ggplot(aes(Year, Yield)) +
+  geom_line() +
+  theme(legend.position = "none") +
+  facet_wrap(~ Crop)
+  
+
+```
+
+# Wrangle
+
+Explore the data and process it into a nice format for plotting! Access each dataset by name by using a dollarsign after the `tt` object and then the name of the data set.
+
+```{r Wrangle}
+
+
+
+```
+
+
+# Visualize
+
+Using your processed dataset, create your unique visualization.
+
+```{r Visualize}
+
+
+  
+```
+
+# Save Image
+
+Save your image for sharing. Be sure to use the `#TidyTuesday` hashtag in your post on twitter! 
+
+```{r}
+
+# This will save your most recent plot
+ggsave(
+  filename = "My TidyTuesday Plot.png",
+  device = "png")
+
+```
