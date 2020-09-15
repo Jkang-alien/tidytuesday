@@ -88,11 +88,16 @@ key_crop <- tt$key_crop_yields %>%
 key_crop %>% 
   skimr::skim()
 
-key_crop %>%
+yields_tidy <- key_crop %>%
   filter(Code == "AFG") %>%
   pivot_longer(Wheat:Bananas,
                names_to = "Crop",
-               values_to = "Yield") %>%
+               values_to = "Yield")
+
+yields_tidy %>%
+  write_rds("crop-yields-shiny/yields_tidy.rds")
+
+%>%
   ggplot(aes(Year, Yield)) +
   geom_line() +
   theme(legend.position = "none") +
