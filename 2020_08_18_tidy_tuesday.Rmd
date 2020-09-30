@@ -2,6 +2,8 @@
 title: "TidyTemplate"
 date: 2020-08-20
 output: html_output
+editor_options: 
+  chunk_output_type: console
 ---
 
 # TidyTuesday
@@ -31,11 +33,17 @@ Dowload the weekly data and make available in the `tt` object.
 tt <- tt_load("2020-08-18")
 
 plants <- tt$plant %>%
-  mutate(year_last_seen = fct_reorder(year_last_seen, "before1990"))
+  mutate(year_last_seen = fct_relevel(year_last_seen, "Before 1900"))
 
 threats <- tt$threats
 
 threats <- threats %>%
+  mutate(year_last_seen = fct_relevel(year_last_seen, "Before 1900"))
+
+by_continent_theats <- threats %>%
+  filter(threatened == 1) %>%
+  count(continent, threat_type, sort = TRUE) %>%
+  mutate(threat_type = fct_reorder2(threat_type, n, sum))
   
 plants %>%
   count(country =  fct_lump(country, 10), sort =TRUE)
@@ -49,8 +57,38 @@ This includes a data dictionary, source, and a link to an article on the data.
 
 ```{r Readme, eval = interactive()}
 
-tt
+plants
 
+plants %>% 
+  count(continent, year_last_seen) %>%
+  filter(is.na(year_last_seen) == FALSE) %>%
+  ggplot(aes(year_last_seen, n)) +
+  geom_col() +
+  facet_wrap(~ continent)
+
+plants %>% 
+  count(continent, year_last_seen) %>%
+  filter(is.na(year_last_seen) == FALSE) %>%
+  ggplot(aes(year_last_seen, n, fill = continent)) +
+  geom_col() 
+
+plants %>%
+  count(binomial_name, sort = TRUE)
+
+threats %>%
+  filter(threatened ==1) %>%
+  filter(is.na(year_last_seen) == FALSE) %>%
+  count(year_last_seen, threat_type, sort = TRUE) %>%
+  ggplot(aes(year_last_seen, n, fill = threat_type)) +
+  geom_col()
+
+threats %>%
+  filter(threatened ==1) %>%
+  filter(is.na(year_last_seen) == FALSE) %>%
+  count(year_last_seen, threat_type, continent, sort = FALSE) %>%
+  ggplot(aes(n, year_last_seen, fill = threat_type)) +
+  geom_col() +
+  facet_wrap(~continent)
 ```
 
 
