@@ -2,6 +2,8 @@
 title: "TidyTemplate"
 date: 2020-09-29
 output: html_output
+editor_options: 
+  chunk_output_type: console
 ---
 
 # TidyTuesday
@@ -39,7 +41,22 @@ This includes a data dictionary, source, and a link to an article on the data.
 
 ```{r Readme, eval = interactive()}
 
-tt
+```{r Load}
+beyonce_lyrics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-29/beyonce_lyrics.csv')
+taylor_swift_lyrics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-29/taylor_swift_lyrics.csv')
+sales <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-29/sales.csv')
+charts <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-29/charts.csv')
+```
+
+```{r}
+beyonce_lyrics %>%
+  count(song_name, sort = TRUE)
+taylor_swift_lyrics %>%
+  count(Title, sort = TRUE)
+taylor_swift_lyrics %>%
+  count(Album, sort = TRUE)
+beyonce_lyrics %>%
+  count(artist_name, sort = TRUE)
 
 ```
 
@@ -60,9 +77,27 @@ tt %>%
 Explore the data and process it into a nice format for plotting! Access each dataset by name by using a dollarsign after the `tt` object and then the name of the data set.
 
 ```{r Wrangle}
+library(scales)
+library(tidytext)
+library(lubridate)
+library(tidylo)
+theme_set(theme_light())
 
+sales %>%
+  filter(country == "US") %>%
+  mutate(title = fct_reorder(title, sales)) %>%
+  ggplot(aes(sales, title, fill = artist)) +
+  geom_col() +
+  scale_x_continuous(labels = dollar) +
+  labs(x = "Sales US", y = "")
 
-
+sales %>%
+  filter(country %in% c("WW", "World")) %>%
+  mutate(title = fct_reorder(title, sales)) %>%
+  ggplot(aes(sales, title, fill = artist)) +
+  geom_col() +
+  scale_x_continuous(labels = dollar) +
+  labs(x = "Sales World", y = "")
 ```
 
 
